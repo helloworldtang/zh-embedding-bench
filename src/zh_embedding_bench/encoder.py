@@ -52,32 +52,41 @@ def load_model(spec: ModelSpec, device: str | None = None) -> SentenceTransforme
     return model
 
 
-def encode_corpus(model: SentenceTransformer, corpus: Sequence[str]) -> np.ndarray:
+def encode_corpus(model: SentenceTransformer, corpus: Sequence[str], batch_size: int = 32) -> np.ndarray:
     """编码候选文档，返回归一化后的向量矩阵。
 
     Args:
         model: 已加载的模型。
         corpus: 候选文档列表。
+        batch_size: 编码 batch；max_seq_length 大的模型须调小（显存 ∝ batch × max_seq_length）。
 
     Returns:
         形状 (len(corpus), dim) 的单位向量矩阵。
     """
-    return np.asarray(model.encode(list(corpus), normalize_embeddings=True, show_progress_bar=False))
+    return np.asarray(
+        model.encode(list(corpus), normalize_embeddings=True, show_progress_bar=False, batch_size=batch_size)
+    )
 
 
-def encode_queries(model: SentenceTransformer, spec: ModelSpec, queries: Sequence[str]) -> np.ndarray:
+def encode_queries(
+    model: SentenceTransformer,
+    spec: ModelSpec,
+    queries: Sequence[str],
+    batch_size: int = 32,
+) -> np.ndarray:
     """编码 query，自动拼接模型要求的指令前缀（BGE 系列需要）。
 
     Args:
         model: 已加载的模型。
         spec: 模型描述，用于判断是否需要 query 前缀。
         queries: 原始 query 列表。
+        batch_size: 编码 batch。
 
     Returns:
         形状 (len(queries), dim) 的单位向量矩阵。
     """
     prefixed = [build_query_text(spec, q) for q in queries]
-    return np.asarray(model.encode(prefixed, normalize_embeddings=True, show_progress_bar=False))
+    return np.asarray(model.encode(prefixed, normalize_embeddings=True, show_progress_bar=False, batch_size=batch_size))
 
 
 def rank_queries(query_embeddings: np.ndarray, corpus_embeddings: np.ndarray) -> list[list[int]]:

@@ -26,6 +26,8 @@ class ModelSpec:
             需要 True，否则会退化成普通 BertModel、rotary 权重随机初始化，向量完全不可用。
         torch_dtype: 权重精度（"bfloat16"/"float16"/"float32"）。Qwen3-Embedding-8B 有 8B 参数，
             fp32 要占约 32GB 内存，消费级设备必须用 bfloat16（约 17GB）；空串用库默认。
+        encode_batch_size: 编码 batch 大小。max_seq_length 大时显存占用 ∝ batch × max_seq_length，
+            Jina 设 2048/8 是 32GB MPS 上的实测安全值；其余模型默认 32。
     """
 
     name: str
@@ -36,6 +38,7 @@ class ModelSpec:
     attn_implementation: str = ""
     trust_remote_code: bool = False
     torch_dtype: str = ""
+    encode_batch_size: int = 32
 
 
 MODEL_REGISTRY: dict[str, ModelSpec] = {
@@ -48,7 +51,11 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
             name="jina-base",
             hf_id="jinaai/jina-embeddings-v2-base-zh",
             dim=768,
-            max_seq_length=8192,
+            # 模型能力上 8192，但 sentence-transformers 按 max_seq_length 满长度 padding，
+            # 显存 ∝ batch × max_seq_length：32GB MPS 上 8192 直接炸（52GiB buffer / OOM）。
+            # 2048 覆盖参照集 95% 段落（超 2048 的 24/500 条被截断），配 batch 8 为实测安全值。
+            max_seq_length=2048,
+            encode_batch_size=8,
             attn_implementation="eager",
             trust_remote_code=True,
         ),

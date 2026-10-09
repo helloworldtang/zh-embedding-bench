@@ -83,8 +83,8 @@ def benchmark_model(
     queries = [pair.query for pair in pairs]
 
     start = time.perf_counter()
-    corpus_embeddings = encode_corpus(model, corpus)
-    query_embeddings = encode_queries(model, spec, queries)
+    corpus_embeddings = encode_corpus(model, corpus, batch_size=spec.encode_batch_size)
+    query_embeddings = encode_queries(model, spec, queries, batch_size=spec.encode_batch_size)
     encode_seconds = time.perf_counter() - start
 
     rankings = rank_queries(query_embeddings, corpus_embeddings)

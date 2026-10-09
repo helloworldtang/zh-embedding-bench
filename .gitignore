@@ -12,6 +12,7 @@ build/
 # 运行时产物
 results/
 models_cache/
+data/raw/
 
 # 环境与系统文件
 .env

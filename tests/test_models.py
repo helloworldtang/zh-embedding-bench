@@ -50,12 +50,17 @@ class TestQueryPrefix:
 
 
 class TestMaxSeqLength:
-    def test_jina_supports_long_context(self) -> None:
-        assert get_model_spec("jina-base").max_seq_length == 8192
+    def test_jina_uses_2048_with_small_batch(self) -> None:
+        # 8192 满长度 padding 在 32GB MPS 上炸显存；2048 覆盖参照集 95% 段落
+        spec = get_model_spec("jina-base")
+        assert spec.max_seq_length == 2048
+        assert spec.encode_batch_size == 8
 
     def test_others_default_512(self) -> None:
         for name in ("bge-large", "bge-small", "gte-base"):
-            assert get_model_spec(name).max_seq_length == 512
+            spec = get_model_spec(name)
+            assert spec.max_seq_length == 512
+            assert spec.encode_batch_size == 32
 
 
 class TestJinaCompatFlags:
@@ -73,7 +78,9 @@ class TestJinaCompatFlags:
 
 class TestTorchDtype:
     def test_qwen_requires_bfloat16(self) -> None:
-        assert get_model_spec("qwen3-8b").torch_dtype == "bfloat16"
+        spec = get_model_spec("qwen3-8b")
+        assert spec.torch_dtype == "bfloat16"
+        assert spec.encode_batch_size == 32
 
     def test_others_use_library_default(self) -> None:
         for name in ("bge-large", "bge-small", "gte-base", "jina-base"):

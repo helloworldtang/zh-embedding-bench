@@ -40,7 +40,7 @@ uv run python scripts/run_benchmark.py --data data/qa_pairs.jsonl --device mps
 | `bge-large` | `BAAI/bge-large-zh-v1.5` | 1024 | 中文检索第一梯队，资源占用高 |
 | `bge-small` | `BAAI/bge-small-zh-v1.5` | 512 | bge-large 的轻量版，速度快 |
 | `gte-base` | `thenlper/gte-base-zh` | 768 | 均衡选手，速度/效果/尺寸都不差 |
-| `jina-base` | `jinaai/jina-embeddings-v2-base-zh` | 768 | 多语言与长文本（8192 token）强项 |
+| `jina-base` | `jinaai/jina-embeddings-v2-base-zh` | 768 | 多语言与长文本（模型能力 8192，本仓按显存实测锁 2048，见坑 2） |
 | `qwen3-8b` | `Qwen/Qwen3-Embedding-8B` | 4096 | LLM 级 embedding，效果顶级但重：bf16 加载约 17GB 内存，建议 32GB 内存起 |
 
 ## 跑分结果
@@ -57,6 +57,20 @@ uv run python scripts/run_benchmark.py --data data/qa_pairs.jsonl --device mps
 
 编码耗时含 query + corpus 共 120 条文本，仅供量级参考（受设备与缓存状态影响）。
 
+### 公开参照集：T2Retrieval 500 条（真实网页搜索场景）
+
+`data/t2retrieval_500.jsonl`，来自 [mteb/T2Retrieval](https://huggingface.co/datasets/mteb/T2Retrieval)（C-MTEB 检索子任务）固定种子采样，构建方式见 [data/README.md](data/README.md)。同环境跑分：
+
+| 模型 | recall@1 | recall@3 | recall@5 | recall@10 | mrr | 编码耗时(s) |
+| --- | --- | --- | --- | --- | --- | --- |
+| qwen3-8b | 96.20% | 98.80% | 99.60% | 99.80% | 0.9758 | 2066.7 |
+| gte-base | 94.40% | 97.60% | 98.00% | 98.80% | 0.9618 | 11.6 |
+| bge-large | 93.40% | 97.40% | 98.20% | 98.80% | 0.9560 | 40.0 |
+| jina-base | 93.00% | 97.00% | 97.60% | 98.40% | 0.9518 | 36.8 |
+| bge-small | 91.40% | 94.80% | 96.20% | 97.20% | 0.9359 | 2.2 |
+
+注意两点：一，这是候选池 500 的同构任务，绝对分数不可与 C-MTEB 榜单的 118k 全库 ndcg 对表；二，**换数据，结论真的会变**——自建技术文档集上 bge-large 压过 gte-base（93.33% vs 88.33%），在这套真实网页搜索数据上 gte-base 反超（94.40% vs 93.40%）。这正是本仓存在的原因：选型决策要基于你自己的数据重跑，而不是任何单一榜单或本文的数字。qwen3-8b 两套数据都第一，但编码耗时是 bge-large 的 50 倍（长段落集上 34 分钟 vs 40 秒），是否值得取决于你的延迟预算。
+
 Qwen3-Embedding-8B 钱上零成本（Apache 2.0 开源权重、本地推理），成本在算力侧：约 16GB 下载、bf16 加载占约 17GB 内存、编码耗时是 bge-large 的 10 倍量级。本测试集 60 条偏简单（满分不奇怪），但在 harder 数据集上 Qwen3-Embedding 系列在 C-MTEB 榜单也是第一梯队，属于「效果天花板、资源换来的」。query 侧同样要加 Instruct 前缀（本仓 `QWEN_QUERY_PREFIX` 已内置）。
 
 > 数据集只有 60 条且答案段落较短，绝对分数与文章中 500 条规模的自建集不同，关注模型间的相对差距。换成你自己的数据重跑：替换 `data/qa_pairs.jsonl` 即可，格式见 [data/README.md](data/README.md)。
@@ -64,7 +78,7 @@ Qwen3-Embedding-8B 钱上零成本（Apache 2.0 开源权重、本地推理）�
 ## 实测踩过的六个坑（本仓已内置处理）
 
 1. **维度不一致**：四个模型输出维度不同（1024/512/768），切换模型时向量库必须重建，否则维度对不上直接报错。
-2. **token 截断**：sentence-transformers 默认 `max_seq_length=512` 会静默截断长文档；Jina 支持 8192，需手动设置（见 `models.py` 的 `max_seq_length` 字段）。
+2. **token 截断与显存旋钮**：sentence-transformers 默认 `max_seq_length=512` 会静默截断长文档；但调大时注意显存占用 ∝ `batch × max_seq_length`——Jina 在 8192 满长度 padding 下 32GB MPS 直接炸（52GiB tokenizer buffer / MPS OOM），实测安全值为 2048 + batch 8（覆盖公开参照集 95% 段落）。**max_seq_length 不只是截断旋钮，更是显存旋钮**。
 3. **归一化**：编码时统一 `normalize_embeddings=True`，归一化后点积即 cosine 相似度。切换向量库时务必确认它算的是内积还是余弦，结果会差很多。
 4. **BGE 查询指令前缀**：BGE 官方要求检索场景 query 侧加前缀「为这个句子生成表示以用于检索相关文章：」，文档侧不加。漏加召回率会掉几个点（`build_query_text()` 已内置，见 `models.py`）。
 5. **Jina v2 与新版 transformers 不兼容**：两层坑——一是 Jina v2 是自定义架构（`JinaBertModel` + rotary 位置编码），必须 `trust_remote_code=True`，否则静默退化成普通 BertModel、rotary 权重随机初始化，召回率直接归零（本仓实测 0%）；二是其自定义代码 import 了 transformers 5.x 已删除的 `transformers.onnx`，因此依赖锁定 `transformers<5`。两个开关都已写入 `ModelSpec`。另外国内网络下 HF 直连未认证下载会被限速到几乎不动，建议 `export HF_ENDPOINT=https://hf-mirror.com`。
