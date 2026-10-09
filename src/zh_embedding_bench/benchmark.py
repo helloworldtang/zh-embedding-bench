@@ -5,9 +5,15 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+import numpy as np
+import sentence_transformers
+import torch
+import transformers
 
 from zh_embedding_bench import DEFAULT_KS
 from zh_embedding_bench.encoder import encode_corpus, encode_queries, load_model, rank_queries
@@ -18,6 +24,24 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from zh_embedding_bench.data import QAPair
+
+
+def collect_env_info() -> dict[str, str]:
+    """采集当前跑分环境的库版本。
+
+    跑分有效性不要求各模型环境完全一致（同硬件/同数据/同指标实现即可），
+    但库版本必须随结果落盘，跨环境对比耗时与指标时才有据可查。
+
+    Returns:
+        形如 {"python": "3.14", "torch": "...", ...} 的版本字典。
+    """
+    return {
+        "python": sys.version.split()[0],
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
+        "sentence_transformers": sentence_transformers.__version__,
+        "numpy": np.__version__,
+    }
 
 
 @dataclass

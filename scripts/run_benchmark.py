@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from zh_embedding_bench import DEFAULT_KS
-from zh_embedding_bench.benchmark import format_results_table, run_benchmark
+from zh_embedding_bench.benchmark import collect_env_info, format_results_table, run_benchmark
 from zh_embedding_bench.data import load_qa_pairs
 from zh_embedding_bench.models import MODEL_REGISTRY, get_model_spec
 
@@ -59,12 +59,23 @@ def main(argv: list[str] | None = None) -> int:
 
     RESULTS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    env_info = collect_env_info()
+    env_line = " / ".join(f"{k} {v}" for k, v in env_info.items())
     md_path = RESULTS_DIR / f"benchmark_{stamp}.md"
-    md_path.write_text(f"# 跑分结果 {stamp}\n\n测试集: {args.data}（{len(pairs)} 条）\n\n{table}\n", encoding="utf-8")
+    md_path.write_text(
+        f"# 跑分结果 {stamp}\n\n测试集: {args.data}（{len(pairs)} 条）\n\n{table}\n\n环境: {env_line}\n",
+        encoding="utf-8",
+    )
     json_path = RESULTS_DIR / f"benchmark_{stamp}.json"
     json_path.write_text(
         json.dumps(
-            [{"model": r.spec.name, "hf_id": r.spec.hf_id, "metrics": r.metrics, "extra": r.extra} for r in results],
+            {
+                "env": env_info,
+                "models": [
+                    {"model": r.spec.name, "hf_id": r.spec.hf_id, "metrics": r.metrics, "extra": r.extra}
+                    for r in results
+                ],
+            },
             ensure_ascii=False,
             indent=2,
         ),
