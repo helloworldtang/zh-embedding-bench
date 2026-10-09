@@ -11,14 +11,15 @@ from zh_embedding_bench.models import (
 
 
 class TestRegistry:
-    def test_contains_four_models(self) -> None:
-        assert set(MODEL_REGISTRY) == {"bge-large", "bge-small", "gte-base", "jina-base"}
+    def test_contains_five_models(self) -> None:
+        assert set(MODEL_REGISTRY) == {"bge-large", "bge-small", "gte-base", "jina-base", "qwen3-8b"}
 
     def test_dimensions(self) -> None:
         assert get_model_spec("bge-large").dim == 1024
         assert get_model_spec("bge-small").dim == 512
         assert get_model_spec("gte-base").dim == 768
         assert get_model_spec("jina-base").dim == 768
+        assert get_model_spec("qwen3-8b").dim == 4096
 
     def test_unknown_model_lists_alternatives(self) -> None:
         with pytest.raises(KeyError, match="bge-large"):
@@ -30,7 +31,12 @@ class TestQueryPrefix:
         for name in ("bge-large", "bge-small"):
             assert get_model_spec(name).query_prefix == BGE_QUERY_PREFIX
 
-    def test_non_bge_models_have_no_prefix(self) -> None:
+    def test_qwen_uses_instruct_format_prefix(self) -> None:
+        prefix = get_model_spec("qwen3-8b").query_prefix
+        assert prefix.startswith("Instruct: ")
+        assert prefix.endswith("\nQuery: ")
+
+    def test_models_without_prefix(self) -> None:
         for name in ("gte-base", "jina-base"):
             assert get_model_spec(name).query_prefix == ""
 
@@ -63,3 +69,12 @@ class TestJinaCompatFlags:
             spec = get_model_spec(name)
             assert spec.attn_implementation == ""
             assert spec.trust_remote_code is False
+
+
+class TestTorchDtype:
+    def test_qwen_requires_bfloat16(self) -> None:
+        assert get_model_spec("qwen3-8b").torch_dtype == "bfloat16"
+
+    def test_others_use_library_default(self) -> None:
+        for name in ("bge-large", "bge-small", "gte-base", "jina-base"):
+            assert get_model_spec(name).torch_dtype == ""

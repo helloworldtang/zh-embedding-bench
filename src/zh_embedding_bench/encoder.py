@@ -10,12 +10,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+import torch
 from sentence_transformers import SentenceTransformer
 
 from zh_embedding_bench.models import ModelSpec, build_query_text
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+TORCH_DTYPES = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}
 
 
 def load_model(spec: ModelSpec, device: str | None = None) -> SentenceTransformer:
@@ -27,13 +30,22 @@ def load_model(spec: ModelSpec, device: str | None = None) -> SentenceTransforme
 
     Returns:
         已就绪的模型实例。
+
+    Raises:
+        ValueError: 如果 spec.torch_dtype 不是受支持的精度名。
     """
-    model_kwargs = {"attn_implementation": spec.attn_implementation} if spec.attn_implementation else None
+    if spec.torch_dtype and spec.torch_dtype not in TORCH_DTYPES:
+        raise ValueError(f"不支持的精度 '{spec.torch_dtype}'，可选: {sorted(TORCH_DTYPES)}")
+    model_kwargs: dict[str, object] = {}
+    if spec.attn_implementation:
+        model_kwargs["attn_implementation"] = spec.attn_implementation
+    if spec.torch_dtype:
+        model_kwargs["dtype"] = TORCH_DTYPES[spec.torch_dtype]
     # transformers 锁 4.x 后 sentence-transformers 构造函数缺类型标注，须显式标注变量类型
     model: SentenceTransformer = SentenceTransformer(
         spec.hf_id,
         device=device,
-        model_kwargs=model_kwargs,
+        model_kwargs=model_kwargs or None,
         trust_remote_code=spec.trust_remote_code or None,
     )
     model.max_seq_length = spec.max_seq_length

@@ -12,6 +12,8 @@ dependencies = [
     "numpy>=1.26",
     # jina-embeddings-v2 的自定义代码 import 了 transformers.onnx（5.x 已删除），须锁 4.x
     "transformers>=4.41,<5",
+    # Qwen3 的 tokenizer (BPE) 转换需要 protobuf，缺失时报误导性的 Unrecognized processing class
+    "protobuf>=4.25",
 ]
 
 [project.optional-dependencies]

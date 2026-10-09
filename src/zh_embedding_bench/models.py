@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 BGE_QUERY_PREFIX = "为这个句子生成表示以用于检索相关文章："
 
+QWEN_QUERY_PREFIX = "Instruct: 给定一个中文技术文档问题，检索出最相关的答案段落\nQuery: "
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -22,6 +24,8 @@ class ModelSpec:
             新版 transformers 的默认值 "torch"，须显式指定 "eager"；空串表示不指定。
         trust_remote_code: 是否允许加载模型仓库自带的自定义代码。Jina v2 的 JinaBertModel
             需要 True，否则会退化成普通 BertModel、rotary 权重随机初始化，向量完全不可用。
+        torch_dtype: 权重精度（"bfloat16"/"float16"/"float32"）。Qwen3-Embedding-8B 有 8B 参数，
+            fp32 要占约 32GB 内存，消费级设备必须用 bfloat16（约 17GB）；空串用库默认。
     """
 
     name: str
@@ -31,6 +35,7 @@ class ModelSpec:
     max_seq_length: int = 512
     attn_implementation: str = ""
     trust_remote_code: bool = False
+    torch_dtype: str = ""
 
 
 MODEL_REGISTRY: dict[str, ModelSpec] = {
@@ -46,6 +51,13 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
             max_seq_length=8192,
             attn_implementation="eager",
             trust_remote_code=True,
+        ),
+        ModelSpec(
+            name="qwen3-8b",
+            hf_id="Qwen/Qwen3-Embedding-8B",
+            dim=4096,
+            query_prefix=QWEN_QUERY_PREFIX,
+            torch_dtype="bfloat16",
         ),
     ]
 }
