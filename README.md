@@ -11,8 +11,8 @@
 ## 安装
 
 ```bash
-git clone https://github.com/helloworldtang/embedding.git
-cd embedding
+git clone https://github.com/helloworldtang/zh-embedding-bench.git
+cd zh-embedding-bench
 uv sync
 ```
 
@@ -21,7 +21,7 @@ uv sync
 ## 快速开始
 
 ```bash
-# 跑全部四个模型
+# 跑全部五个模型
 uv run python scripts/run_benchmark.py
 
 # 只跑指定模型（逗号分隔）
